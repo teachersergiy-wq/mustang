@@ -1,0 +1,280 @@
+/* Mustang — mobile-first */
+:root {
+  --bg: #1e1c1a;
+  --panel: #2c2926;
+  --board-bg: #312e2b;
+  --light: #f0d9b5;
+  --dark: #b58863;
+  --accent: #c9a227;
+  --text: #f0d9b5;
+  --muted: #a8a29e;
+  --ok: #4ade80;
+  --danger: #f87171;
+  --btn: #3f3a35;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: calc(6px + var(--safe-top)) 10px calc(10px + var(--safe-bottom));
+  gap: 6px;
+}
+
+/* ---- Header ---- */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--accent);
+}
+
+#stats {
+  display: flex;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#stats span strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- Message ---- */
+#message {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 1.3em;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+#message.win {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+#message.pause {
+  color: var(--accent);
+}
+
+/* ---- Board ---- */
+#board-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
+}
+
+#board {
+  display: block;
+  width: min(100%, calc(100dvh - 210px), 420px);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  background: var(--board-bg);
+}
+
+/* ---- Controls ---- */
+#controls {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.levels {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.levels button {
+  flex: 1;
+  max-width: 56px;
+  height: 40px;
+  border: 2px solid #4a4540;
+  background: var(--btn);
+  color: var(--muted);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.levels button.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: #4a4238;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.actions button {
+  height: 46px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: #1a1508;
+}
+
+.actions button.secondary {
+  background: #4b5563;
+  color: #f3f4f6;
+}
+
+.actions button:disabled {
+  opacity: 0.4;
+}
+
+.actions button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ---- Win overlay ---- */
+#win-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+  text-align: center;
+}
+
+#win-panel.hidden {
+  display: none;
+}
+
+#win-panel h2 {
+  font-size: 1.5rem;
+  color: var(--ok);
+  margin-bottom: 10px;
+}
+
+#win-panel p {
+  color: #e7e5e4;
+  line-height: 1.5;
+  margin-bottom: 18px;
+  white-space: pre-line;
+  font-size: 0.95rem;
+}
+
+#win-panel .row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#win-panel button {
+  min-width: 120px;
+  height: 46px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: #1a1508;
+}
+
+#win-panel button.secondary {
+  background: #4b5563;
+  color: #f3f4f6;
+}
+
+/* ---- Very small phones ---- */
+@media (max-height: 620px) {
+  header h1 { font-size: 1.05rem; }
+  #stats { font-size: 0.72rem; }
+  .levels button { height: 36px; font-size: 0.85rem; }
+  .actions button { height: 42px; font-size: 0.88rem; }
+  #message { font-size: 0.8rem; }
+}
+
+/* Landscape phone: board left, controls right */
+@media (orientation: landscape) and (max-height: 480px) {
+  #app {
+    max-width: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  header {
+    width: 100%;
+  }
+  #message {
+    width: 100%;
+    order: 1;
+  }
+  #board-wrap {
+    flex: 1 1 auto;
+    order: 2;
+  }
+  #board {
+    width: min(72vh, 360px);
+  }
+  #controls {
+    width: 130px;
+    order: 3;
+    justify-content: center;
+  }
+  .levels {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .levels button {
+    max-width: none;
+  }
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}

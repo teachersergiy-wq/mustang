@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#1e1c1a" />
+  <title>Мустанг — слони проти коня</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Мустанг</h1>
+      <div id="stats">
+        <span>Сл <strong id="st-b">—</strong></span>
+        <span>Ходи <strong id="st-m">0</strong></span>
+        <span>Час <strong id="st-t">0.0</strong></span>
+      </div>
+    </header>
+
+    <div id="message">Оберіть рівень і натисніть «Нова гра»</div>
+
+    <div id="board-wrap">
+      <canvas id="board" width="400" height="400"></canvas>
+    </div>
+
+    <div id="controls">
+      <div class="levels">
+        <button type="button" data-n="32" class="lvl">32</button>
+        <button type="button" data-n="24" class="lvl">24</button>
+        <button type="button" data-n="16" class="lvl active">16</button>
+        <button type="button" data-n="14" class="lvl">14</button>
+        <button type="button" data-n="12" class="lvl">12</button>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-new">Нова гра</button>
+        <button type="button" id="btn-pause" class="secondary" disabled>Пауза</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="win-panel" class="hidden">
+    <h2>Перемога!</h2>
+    <p id="win-text"></p>
+    <div class="row">
+      <button type="button" id="btn-again">Ще раз</button>
+      <button type="button" id="btn-close" class="secondary">Закрити</button>
+    </div>
+  </div>
+
+  <script src="js/game_engine.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
