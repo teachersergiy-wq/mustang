@@ -38,19 +38,47 @@
         <button type="button" id="btn-new">Нова гра</button>
         <button type="button" id="btn-pause" class="secondary" disabled>Пауза</button>
       </div>
+      <div class="actions single">
+        <button type="button" id="btn-records" class="secondary">Рекорди</button>
+      </div>
     </div>
   </div>
 
-  <div id="win-panel" class="hidden">
+  <div id="win-panel" class="hidden overlay">
     <h2>Перемога!</h2>
     <p id="win-text"></p>
+    <label class="field">
+      <span>Ваше ім'я</span>
+      <input id="win-name" type="text" maxlength="32" placeholder="Гравець" autocomplete="nickname" />
+    </label>
+    <p id="win-save-status" class="hint"></p>
     <div class="row">
-      <button type="button" id="btn-again">Ще раз</button>
-      <button type="button" id="btn-close" class="secondary">Закрити</button>
+      <button type="button" id="btn-save-record">Зберегти рекорд</button>
+      <button type="button" id="btn-again" class="secondary">Ще раз</button>
     </div>
+    <button type="button" id="btn-close" class="linkish">Закрити</button>
   </div>
 
+  <div id="records-panel" class="hidden overlay">
+    <h2>Рекорди</h2>
+    <div class="tabs">
+      <button type="button" class="tab active" data-src="local">На пристрої</button>
+      <button type="button" class="tab" data-src="world">Світ</button>
+    </div>
+    <div class="sort-row">
+      <button type="button" class="sort active" data-sort="time">Час</button>
+      <button type="button" class="sort" data-sort="moves">Ходи</button>
+      <button type="button" class="sort" data-sort="balance">Баланс</button>
+    </div>
+    <div class="level-row" id="rec-levels"></div>
+    <div id="records-list" class="records-list"></div>
+    <p id="records-hint" class="hint"></p>
+    <button type="button" id="btn-records-close" class="secondary wide">Закрити</button>
+  </div>
+
+  <script src="js/config.js"></script>
   <script src="js/game_engine.js"></script>
+  <script src="js/records.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>
