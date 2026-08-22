@@ -167,21 +167,44 @@
         hint.textContent = "";
         return;
       }
-      worldCache = await R.fetchWorld();
-      source = worldCache;
-      hint.textContent = source.length
-        ? "Світових записів: " + source.length
-        : "Поки немає світових рекордів";
+      var world = await R.fetchWorld();
+      // сумісність: масив або {ok, records, error}
+      if (Array.isArray(world)) {
+        source = world;
+        worldCache = world;
+        hint.textContent = source.length
+          ? ("Світ: " + source.length + " усього, для " + recLevel + " сл.: " + R.countForLevel(source, recLevel))
+          : "Поки немає світових рекордів";
+      } else {
+        source = (world && world.records) || [];
+        worldCache = source;
+        if (!world || !world.ok) {
+          listEl.innerHTML =
+            '<div class="rec-empty">Не вдалося завантажити світ.<br>' +
+            escapeHtml((world && world.error) || "невідома помилка") +
+            (world && world.preview ? "<br><small>" + escapeHtml(world.preview) + "</small>" : "") +
+            "</div>";
+          hint.textContent = "Перевірте Apps Script і config.js";
+          return;
+        }
+        hint.textContent = source.length
+          ? ("Світ: " + source.length + " усього, для " + recLevel + " сл.: " + R.countForLevel(source, recLevel))
+          : "Поки немає світових рекордів";
+      }
     } else if (R) {
       source = R.loadLocal();
       hint.textContent = source.length
-        ? "На пристрої: " + source.length
+        ? ("Пристрій: " + source.length + " усього, для " + recLevel + " сл.: " + R.countForLevel(source, recLevel))
         : "Ще немає збережених результатів";
     }
 
     var sorted = R ? R.filterSort(source, recLevel, recSort, 25) : [];
     if (!sorted.length) {
-      listEl.innerHTML = '<div class="rec-empty">Немає записів для цього рівня</div>';
+      var total = source.length || 0;
+      listEl.innerHTML =
+        '<div class="rec-empty">Немає записів для рівня ' + recLevel +
+        (total ? "<br>(усього в базі: " + total + ", оберіть інший рівень)" : "") +
+        "</div>";
       return;
     }
 

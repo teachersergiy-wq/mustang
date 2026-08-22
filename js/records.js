@@ -15,7 +15,10 @@
     try {
       const raw = localStorage.getItem(LOCAL_KEY);
       const data = raw ? JSON.parse(raw) : [];
-      return Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) return [];
+      return data
+        .map(normalizeRecord)
+        .filter((r) => r.bishops >= 1 && r.bishops <= 32 && r.moves > 0);
     } catch (_) {
       return [];
     }
@@ -50,11 +53,25 @@
     ].join("|");
   }
 
+  function normalizeRecord(record) {
+    return {
+      name: String(record.name || "Гравець").trim(),
+      bishops: parseInt(record.bishops, 10),
+      moves: parseInt(record.moves, 10),
+      time_sec: Math.round(Number(record.time_sec) * 10) / 10,
+      notation: String(record.notation || ""),
+      date: String(record.date || ""),
+      timestamp: Number(record.timestamp) || Date.now() / 1000,
+      score: record.score,
+    };
+  }
+
   function addLocal(record) {
     const list = loadLocal();
-    const k = recKey(record);
-    if (list.some((x) => recKey(x) === k)) return list;
-    list.push(record);
+    const rec = normalizeRecord(record);
+    const k = recKey(rec);
+    if (list.some((x) => recKey(normalizeRecord(x)) === k)) return list;
+    list.push(rec);
     saveLocal(list);
     return list;
   }
@@ -63,15 +80,16 @@
     const url = (cfg().APPS_SCRIPT_URL || "").trim();
     if (!url) return { ok: false, reason: "no_url" };
 
+    const rec = normalizeRecord(record);
     const payload = {
       secret: cfg().APPS_SCRIPT_SECRET || "mustang_secret_2026",
-      name: record.name,
-      bishops: record.bishops,
-      moves: record.moves,
-      time_sec: record.time_sec,
-      notation: record.notation || "",
-      date: record.date,
-      timestamp: record.timestamp,
+      name: rec.name,
+      bishops: rec.bishops,
+      moves: rec.moves,
+      time_sec: rec.time_sec,
+      notation: rec.notation || "",
+      date: rec.date,
+      timestamp: rec.timestamp,
     };
 
     try {
@@ -84,7 +102,11 @@
       });
       const text = await res.text();
       try {
-        return JSON.parse(text);
+        var parsed = JSON.parse(text);
+        if (parsed && parsed.ok === false) {
+          return { ok: false, reason: parsed.error || "rejected" };
+        }
+        return parsed;
       } catch (_) {
         return { ok: true, raw: text.slice(0, 200) };
       }
@@ -95,29 +117,84 @@
 
   async function fetchWorld() {
     const url = (cfg().APPS_SCRIPT_URL || "").trim();
-    if (!url) return [];
+    if (!url) {
+      return { ok: false, records: [], error: "no_url", total: 0 };
+    }
 
+    const endpoint = url.replace(/\/+$/, "") + "?action=get_records&_ts=" + Date.now();
     try {
-      const res = await fetch(url + "?action=get_records&_ts=" + Date.now(), {
+      const res = await fetch(endpoint, {
         method: "GET",
         mode: "cors",
+        redirect: "follow",
+        credentials: "omit",
+        cache: "no-store",
       });
-      const data = await res.json();
-      if (data && data.ok && Array.isArray(data.records)) return data.records;
-      if (Array.isArray(data)) return data;
-      return [];
-    } catch (_) {
-      return [];
+      const text = await res.text();
+      var data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        return {
+          ok: false,
+          records: [],
+          error: "Відповідь не JSON (status " + res.status + ")",
+          total: 0,
+          preview: String(text).slice(0, 100),
+        };
+      }
+
+      var list = [];
+      if (data && data.ok && Array.isArray(data.records)) list = data.records;
+      else if (Array.isArray(data)) list = data;
+      else if (data && Array.isArray(data.data)) list = data.data;
+      else {
+        return {
+          ok: false,
+          records: [],
+          error: "Невідомий формат відповіді",
+          total: 0,
+          preview: JSON.stringify(data).slice(0, 100),
+        };
+      }
+
+      list = list
+        .map(function (r) {
+          // підтримка і об'єктів, і масивів-рядків
+          if (Array.isArray(r)) {
+            return normalizeRecord({
+              name: r[0],
+              bishops: r[1],
+              moves: r[2],
+              time_sec: r[3],
+              notation: r[4],
+              date: r[5],
+              timestamp: r[6],
+            });
+          }
+          return normalizeRecord(r);
+        })
+        .filter(function (r) {
+          return r.name && r.bishops >= 1 && r.bishops <= 32 && r.moves > 0;
+        });
+
+      return { ok: true, records: list, error: "", total: list.length };
+    } catch (err) {
+      return {
+        ok: false,
+        records: [],
+        error: "Мережа/CORS: " + String(err),
+        total: 0,
+      };
     }
   }
 
   function filterSort(records, bishops, sortBy, limit) {
+    const bWant = parseInt(bishops, 10);
     let list = (records || []).filter((r) => {
-      try {
-        return Number(r.bishops) === Number(bishops);
-      } catch (_) {
-        return false;
-      }
+      var b = parseInt(r.bishops, 10);
+      if (isNaN(b)) b = parseInt(String(r.bishops).replace(",", "."), 10);
+      return b === bWant;
     });
 
     const weight = 15;
@@ -144,6 +221,13 @@
     return Number(r.time_sec).toFixed(1) + " с";
   }
 
+  function countForLevel(records, bishops) {
+    var bWant = parseInt(bishops, 10);
+    return (records || []).filter(function (r) {
+      return parseInt(r.bishops, 10) === bWant;
+    }).length;
+  }
+
   global.MustangRecords = {
     loadLocal,
     addLocal,
@@ -153,5 +237,7 @@
     fetchWorld,
     filterSort,
     formatValue,
+    countForLevel,
+    normalizeRecord,
   };
 })(typeof window !== "undefined" ? window : globalThis);
