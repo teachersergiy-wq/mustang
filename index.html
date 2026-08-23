@@ -46,6 +46,9 @@
         <button type="button" id="btn-undo" class="secondary" disabled>Відмінити хід</button>
         <button type="button" id="btn-records" class="secondary">Рекорди</button>
       </div>
+      <div class="actions single">
+        <button type="button" id="btn-notation" class="secondary" disabled>Нотація</button>
+      </div>
     </div>
   </div>
 
@@ -60,6 +63,9 @@
     <div class="row">
       <button type="button" id="btn-save-record">Зберегти рекорд</button>
       <button type="button" id="btn-again" class="secondary">Ще раз</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-win-notation" class="secondary">Нотація / replay</button>
     </div>
     <button type="button" id="btn-close" class="linkish">Закрити</button>
   </div>
@@ -79,6 +85,22 @@
     <div id="records-list" class="records-list"></div>
     <p id="records-hint" class="hint"></p>
     <button type="button" id="btn-records-close" class="secondary wide">Закрити</button>
+  </div>
+
+
+  <div id="notation-panel" class="hidden overlay">
+    <h2>Нотація</h2>
+    <p id="notation-meta" class="hint"></p>
+    <pre id="notation-text" class="notation-text"></pre>
+    <div class="row replay-controls">
+      <button type="button" id="btn-rep-start" class="secondary">⏮</button>
+      <button type="button" id="btn-rep-prev" class="secondary">◀</button>
+      <button type="button" id="btn-rep-play" class="secondary">▶</button>
+      <button type="button" id="btn-rep-next" class="secondary">▶|</button>
+      <button type="button" id="btn-rep-end" class="secondary">⏭</button>
+    </div>
+    <p id="notation-step" class="hint"></p>
+    <button type="button" id="btn-notation-close" class="secondary wide">Закрити</button>
   </div>
 
   <script src="js/config.js"></script>
