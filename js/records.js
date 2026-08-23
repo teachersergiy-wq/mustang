@@ -192,34 +192,67 @@
     }
   }
 
-  function filterSort(records, bishops, sortBy, limit) {
-    const bWant = parseInt(bishops, 10);
-    let list = (records || []).filter((r) => {
-      var b = parseInt(r.bishops, 10);
-      if (isNaN(b)) b = parseInt(String(r.bishops).replace(",", "."), 10);
-      return b === bWant;
-    });
+  /** Зведений рейтинг Grok* (без реперних точок)
+   * R = 1000 * exp(0.08*d + 0.004*d²) / (H + T/15), d = 32 − S; S≤11 → 0
+   */
+  function grokStarRating(bishops, moves, timeSec) {
+    var s = Number(bishops);
+    var h = Number(moves);
+    var t = Number(timeSec);
+    if (!(s > 11) || !(h > 0) || t < 0 || isNaN(s) || isNaN(h) || isNaN(t)) return 0;
+    var d = 32 - s;
+    var difficulty = Math.exp(0.08 * d + 0.004 * d * d);
+    var e = h + t / 15;
+    if (e <= 0) return 0;
+    return (1000 * difficulty) / e;
+  }
 
-    const weight = 15;
+  function balanceScore(moves, timeSec) {
+    return Number(moves) * 2 + Number(timeSec);
+  }
+
+  function filterSort(records, bishops, sortBy, limit) {
+    var list = (records || []).slice();
+    if (sortBy !== "worldscore") {
+      var bWant = parseInt(bishops, 10);
+      list = list.filter(function (r) {
+        var b = parseInt(r.bishops, 10);
+        if (isNaN(b)) b = parseInt(String(r.bishops).replace(",", "."), 10);
+        return b === bWant;
+      });
+    }
+
     if (sortBy === "moves") {
-      list.sort((a, b) => Number(a.moves) - Number(b.moves) || Number(a.time_sec) - Number(b.time_sec));
+      list.sort(function (a, b) {
+        return Number(a.moves) - Number(b.moves) || Number(a.time_sec) - Number(b.time_sec);
+      });
     } else if (sortBy === "balance") {
-      list.sort((a, b) => {
-        const ea = Number(a.moves) + Number(a.time_sec) / weight;
-        const eb = Number(b.moves) + Number(b.time_sec) / weight;
-        return ea - eb;
+      // менше = краще: ходи*2 + час(с)
+      list.sort(function (a, b) {
+        return balanceScore(a.moves, a.time_sec) - balanceScore(b.moves, b.time_sec);
+      });
+    } else if (sortBy === "worldscore") {
+      // більше = краще
+      list.sort(function (a, b) {
+        return grokStarRating(b.bishops, b.moves, b.time_sec) - grokStarRating(a.bishops, a.moves, a.time_sec);
       });
     } else {
-      list.sort((a, b) => Number(a.time_sec) - Number(b.time_sec) || Number(a.moves) - Number(b.moves));
+      list.sort(function (a, b) {
+        return Number(a.time_sec) - Number(b.time_sec) || Number(a.moves) - Number(b.moves);
+      });
     }
-    return list.slice(0, limit || cfg().TOP_LIMIT || 25);
+    var lim = limit != null ? limit : (sortBy === "worldscore" ? 100 : (cfg().TOP_LIMIT || 25));
+    return list.slice(0, lim);
   }
 
   function formatValue(r, sortBy) {
     if (sortBy === "moves") return String(r.moves);
     if (sortBy === "balance") {
-      const e = Number(r.moves) + Number(r.time_sec) / 15;
-      return e.toFixed(1);
+      return String(Math.round(balanceScore(r.moves, r.time_sec) * 10) / 10);
+    }
+    if (sortBy === "worldscore") {
+      var sc = grokStarRating(r.bishops, r.moves, r.time_sec);
+      return sc.toFixed(1) + " · " + r.bishops + "сл";
     }
     return Number(r.time_sec).toFixed(1) + " с";
   }
@@ -242,5 +275,7 @@
     formatValue,
     countForLevel,
     normalizeRecord,
+    grokStarRating,
+    balanceScore,
   };
 })(typeof window !== "undefined" ? window : globalThis);

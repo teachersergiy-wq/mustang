@@ -171,6 +171,15 @@
       if (!silent) setMsg("Немає активної гри для збереження");
       return false;
     }
+    // Явне «Зберегти» — завжди ставить паузу
+    if (!silent && state === "playing") {
+      elapsed = currentElapsed();
+      startedAt = null;
+      state = "paused";
+      selected = null;
+      legalMoves = [];
+      stopTimer();
+    }
     var payload = {
       version: 1,
       savedAt: Date.now(),
@@ -180,15 +189,20 @@
       moveCount: moveCount,
       moveHistory: moveHistory.slice(),
       elapsed: currentElapsed(),
-      state: state === "paused" ? "paused" : "playing",
+      state: "paused",
       undoStack: undoStack.slice(-30),
       undoUsed: !!undoUsed,
       initialKnight: initialKnight,
       initialNumBishops: initialNumBishops,
+      oneShot: true,
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-      if (!silent) setMsg("Партію збережено");
+      if (!silent) {
+        setMsg("Збережено на паузі. «Далі» або «Продовжити» — одноразово", "pause");
+        draw();
+      }
+      updateStats();
       updateSaveButtons();
       return true;
     } catch (e) {
@@ -245,10 +259,11 @@
     initialKnight = data.initialKnight || (board.knight ? [board.knight[0], board.knight[1]] : null);
     initialNumBishops = data.initialNumBishops || board.numBishops;
 
-    // після завантаження — на паузі, щоб час не тікав одразу
+    // після завантаження — на паузі; збереження одразу видаляється (лише 1 раз)
     state = "paused";
     startedAt = null;
-    setMsg("Збережену партію завантажено — натисніть «Далі»", "pause");
+    clearSave();
+    setMsg("Продовжено (збереження знято). Натисніть «Далі»", "pause");
     updateStats();
     updateSaveButtons();
     draw();
@@ -939,12 +954,16 @@
         : "Ще немає збережених результатів";
     }
 
-    var sorted = R ? R.filterSort(source, recLevel, recSort, 25) : [];
+    var lim = recSort === "worldscore" ? 100 : 25;
+    var sorted = R ? R.filterSort(source, recLevel, recSort, lim) : [];
     if (!sorted.length) {
       var total = source.length || 0;
       listEl.innerHTML =
-        '<div class="rec-empty">Немає записів для рівня ' + recLevel +
-        (total ? "<br>(усього в базі: " + total + ", оберіть інший рівень)" : "") +
+        '<div class="rec-empty">' +
+        (recSort === "worldscore"
+          ? "Немає записів для World score"
+          : ("Немає записів для рівня " + recLevel +
+             (total ? "<br>(усього в базі: " + total + ", оберіть інший рівень)" : ""))) +
         "</div>";
       return;
     }
@@ -1256,10 +1275,11 @@
       legalMoves = [];
       setMsg("Пауза — натисніть «Далі»", "pause");
       stopTimer();
-      saveGame(true);
       updateStats();
       draw();
     } else if (state === "paused") {
+      // «Далі» знімає одноразове збереження
+      clearSave();
       startedAt = performance.now() / 1000;
       state = "playing";
       setMsg("Гру продовжено");
@@ -1350,23 +1370,14 @@
       document.querySelectorAll(".sort").forEach(function (b) { b.classList.remove("active"); });
       btn.classList.add("active");
       recSort = btn.dataset.sort;
+      var lvlRow = document.getElementById("rec-levels");
+      if (lvlRow) lvlRow.style.display = recSort === "worldscore" ? "none" : "";
       renderRecords();
     });
   });
 
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("orientationchange", function () { setTimeout(resizeCanvas, 150); });
-
-  window.addEventListener("beforeunload", function () {
-    if (board && (state === "playing" || state === "paused")) {
-      saveGame(true);
-    }
-  });
-
-  // автозбереження кожні 30 с під час гри
-  setInterval(function () {
-    if (board && state === "playing") saveGame(true);
-  }, 30000);
 
   resizeCanvas();
   updateSaveButtons();
