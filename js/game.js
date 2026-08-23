@@ -400,15 +400,19 @@
     }
 
     gameBoardBackup = null;
-    if (replayMeta.canReplay) {
-      showReplayPosition(tokens.length);
-    } else {
-      document.getElementById("notation-step").textContent = "Лише текст нотації";
-    }
-
     hideWin();
     closeRecords();
     document.getElementById("notation-panel").classList.remove("hidden");
+    // дати панелі відмалюватись, потім показати позицію на дошці
+    setTimeout(function () {
+      resizeCanvas();
+      if (replayMeta.canReplay) {
+        showReplayPosition(tokens.length);
+      } else {
+        document.getElementById("notation-step").textContent = "Лише текст нотації";
+        draw();
+      }
+    }, 30);
   }
 
   function closeNotationPanel() {
@@ -1049,12 +1053,13 @@
       ctx.strokeRect(margin + sc * sq + 2, margin + sr * sq + 2, sq - 4, sq - 4);
     }
 
-    if (board && state !== "paused") {
+    // під час replay завжди малюємо фігури (навіть якщо гра на паузі)
+    if (board && (replayActive || state !== "paused")) {
       var pieces = board.piecesList();
       for (var j = 0; j < pieces.length; j++) {
         drawPiece(pieces[j].r, pieces[j].c, pieces[j].type);
       }
-    } else if (state === "paused") {
+    } else if (state === "paused" && !replayActive) {
       ctx.fillStyle = "rgba(0,0,0,0.35)";
       ctx.fillRect(margin, margin, sq * 8, sq * 8);
       ctx.fillStyle = "#f0d9b5";
