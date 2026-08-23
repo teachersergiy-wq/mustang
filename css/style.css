@@ -469,3 +469,33 @@ header h1 {
   font-style: italic;
   opacity: 0.95;
 }
+
+
+/* Нотація / replay */
+.notation-text {
+  width: min(100%, 360px);
+  max-height: 28vh;
+  overflow: auto;
+  text-align: left;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #e7e5e4;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+}
+.replay-controls {
+  margin: 6px 0 4px;
+}
+.replay-controls button {
+  min-width: 48px;
+  padding: 0 10px;
+}
+.rec-row {
+  cursor: pointer;
+}
+.rec-row:active {
+  background: #3a3632;
+}
