@@ -47,6 +47,14 @@
   const SAVE_KEY = "mustang_web_quicksave_v1";
   let undoStack = [];
   let undoUsed = false;
+  let initialKnight = null; // [r,c] at game start
+  let initialNumBishops = 16;
+  let replayMoves = [];
+  let replayIndex = 0;
+  let replayTimer = null;
+  let replayActive = false;
+  let replayMeta = null;
+  let gameBoardBackup = null;
 
   function boardToData(b) {
     if (!b) return null;
@@ -163,6 +171,8 @@
       state: state === "paused" ? "paused" : "playing",
       undoStack: undoStack.slice(-30),
       undoUsed: !!undoUsed,
+      initialKnight: initialKnight,
+      initialNumBishops: initialNumBishops,
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -220,6 +230,8 @@
     recordSaved = false;
     undoStack = Array.isArray(data.undoStack) ? data.undoStack : [];
     undoUsed = !!data.undoUsed || undoStack.length > 0;
+    initialKnight = data.initialKnight || (board.knight ? [board.knight[0], board.knight[1]] : null);
+    initialNumBishops = data.initialNumBishops || board.numBishops;
 
     // після завантаження — на паузі, щоб час не тікав одразу
     state = "paused";
@@ -248,6 +260,212 @@
         (state === "playing" || state === "paused" || state === "finished")
       );
     }
+    var btnNot = document.getElementById("btn-notation");
+    if (btnNot) {
+      btnNot.disabled = !(moveHistory && moveHistory.length > 0);
+    }
+  }
+
+
+  function orderedBishopSquares(n) {
+    var ordered = [];
+    for (var r = 7; r >= 0; r--) {
+      for (var c = 0; c < 8; c++) ordered.push([r, c]);
+    }
+    n = Math.max(1, Math.min(n, 63));
+    return ordered.slice(0, n);
+  }
+
+  function algToPos(alg) {
+    if (!alg || alg.length < 2) return null;
+    var c = alg.charCodeAt(0) - 97;
+    var r = 8 - parseInt(alg.charAt(1), 10);
+    if (r < 0 || r > 7 || c < 0 || c > 7) return null;
+    return [r, c];
+  }
+
+  function parseHistoryToken(tok) {
+    // "Be2-b5" or "Ne4-d6"
+    tok = String(tok || "").trim();
+    var m = tok.match(/^([BN])([a-h][1-8])-([a-h][1-8])$/i);
+    if (!m) return null;
+    return { piece: m[1].toUpperCase(), from: algToPos(m[2]), to: algToPos(m[3]) };
+  }
+
+  function flattenNotationToTokens(notationOrHistory) {
+    if (Array.isArray(notationOrHistory)) {
+      return notationOrHistory.slice();
+    }
+    var text = String(notationOrHistory || "");
+    var tokens = [];
+    // tokens like B..-.. or N..-..
+    var re = /[BN][a-h][1-8]-[a-h][1-8]/gi;
+    var m;
+    while ((m = re.exec(text))) tokens.push(m[0]);
+    return tokens;
+  }
+
+  function buildBoardAtStart(numBishops, knightRC) {
+    var b = new E.Board(numBishops);
+    // overwrite placement
+    b.grid = Array.from({ length: 8 }, function () { return Array(8).fill(E.EMPTY); });
+    b.bishops = orderedBishopSquares(numBishops);
+    for (var i = 0; i < b.bishops.length; i++) {
+      var sq = b.bishops[i];
+      b.grid[sq[0]][sq[1]] = E.BISHOP;
+    }
+    var kr = knightRC[0], kc = knightRC[1];
+    // if occupied, find free
+    if (b.grid[kr][kc] !== E.EMPTY) {
+      outer: for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          if (b.grid[r][c] === E.EMPTY) {
+            kr = r; kc = c; break outer;
+          }
+        }
+      }
+    }
+    b.knight = [kr, kc];
+    b.grid[kr][kc] = E.KNIGHT;
+    b.numBishops = numBishops;
+    return b;
+  }
+
+  function applyToken(b, token) {
+    var mv = parseHistoryToken(token);
+    if (!mv || !mv.from || !mv.to) return false;
+    var fr = mv.from[0], fc = mv.from[1], tr = mv.to[0], tc = mv.to[1];
+    if (b.grid[fr][fc] === E.EMPTY) return false;
+    b.move(fr, fc, tr, tc);
+    return true;
+  }
+
+  function openNotationPanel(opts) {
+    opts = opts || {};
+    var tokens = flattenNotationToTokens(opts.history || opts.notation || moveHistory);
+    var nb = parseInt(opts.bishops != null ? opts.bishops : (board ? board.numBishops : selectedLevel), 10);
+    var k0 = opts.knightStart || initialKnight;
+    if (!k0 && board && board.knight && tokens.length === 0) {
+      k0 = [board.knight[0], board.knight[1]];
+    }
+    // якщо стартового коня немає — спробувати з першого N-ходу (наближено неточно),
+    // краще вимагати knightStart; для поточної гри він завжди є
+    if (!k0) {
+      for (var i = 0; i < tokens.length; i++) {
+        var t = parseHistoryToken(tokens[i]);
+        if (t && t.piece === "N") {
+          // не стартова позиція; для старих рекордів покажемо лише текст
+          break;
+        }
+      }
+    }
+
+    replayMoves = tokens;
+    replayIndex = tokens.length; // show final by default
+    replayMeta = {
+      bishops: nb,
+      knightStart: k0,
+      name: opts.name || "",
+      canReplay: !!(k0 && tokens.length),
+    };
+
+    var text = opts.notation || (E.formatGameNotation(tokens) || "(порожньо)");
+    document.getElementById("notation-text").textContent = text;
+    var meta = [];
+    if (opts.name) meta.push(opts.name);
+    meta.push(nb + " сл.");
+    meta.push(tokens.length + " півходів");
+    if (!replayMeta.canReplay) meta.push("replay недоступний (немає стартової позиції)");
+    document.getElementById("notation-meta").textContent = meta.join(" · ");
+
+    stopReplayTimer();
+    replayActive = true;
+    // pause live game drawing interference
+    if (state === "playing") {
+      elapsed = currentElapsed();
+      startedAt = null;
+      state = "paused";
+      stopTimer();
+    }
+
+    gameBoardBackup = null;
+    if (replayMeta.canReplay) {
+      showReplayPosition(tokens.length);
+    } else {
+      document.getElementById("notation-step").textContent = "Лише текст нотації";
+    }
+
+    hideWin();
+    closeRecords();
+    document.getElementById("notation-panel").classList.remove("hidden");
+  }
+
+  function closeNotationPanel() {
+    stopReplayTimer();
+    document.getElementById("notation-panel").classList.add("hidden");
+    replayActive = false;
+    document.getElementById("btn-rep-play").textContent = "▶";
+    if (gameBoardBackup) {
+      board = gameBoardBackup;
+      gameBoardBackup = null;
+    }
+    selected = null;
+    legalMoves = [];
+    if (board && (state === "paused" || state === "finished" || state === "playing")) {
+      updateStats();
+      draw();
+    }
+  }
+
+  function stopReplayTimer() {
+    if (replayTimer) {
+      clearInterval(replayTimer);
+      replayTimer = null;
+    }
+  }
+
+  function showReplayPosition(idx) {
+    if (!replayMeta || !replayMeta.canReplay) return;
+    idx = Math.max(0, Math.min(idx, replayMoves.length));
+    replayIndex = idx;
+    if (gameBoardBackup == null && board) {
+      gameBoardBackup = board;
+    }
+    var b = buildBoardAtStart(replayMeta.bishops, replayMeta.knightStart);
+    for (var i = 0; i < idx; i++) {
+      applyToken(b, replayMoves[i]);
+    }
+    board = b;
+    selected = null;
+    legalMoves = [];
+    draw();
+
+    document.getElementById("notation-step").textContent =
+      "Хід " + idx + " / " + replayMoves.length +
+      (idx > 0 ? " · " + replayMoves[idx - 1] : " · старт");
+  }
+
+  function repStart() { stopReplayTimer(); showReplayPosition(0); }
+  function repEnd() { stopReplayTimer(); showReplayPosition(replayMoves.length); }
+  function repPrev() { stopReplayTimer(); showReplayPosition(replayIndex - 1); }
+  function repNext() { stopReplayTimer(); showReplayPosition(replayIndex + 1); }
+  function repPlay() {
+    if (!replayMeta || !replayMeta.canReplay) return;
+    if (replayTimer) {
+      stopReplayTimer();
+      document.getElementById("btn-rep-play").textContent = "▶";
+      return;
+    }
+    if (replayIndex >= replayMoves.length) showReplayPosition(0);
+    document.getElementById("btn-rep-play").textContent = "❚❚";
+    replayTimer = setInterval(function () {
+      if (replayIndex >= replayMoves.length) {
+        stopReplayTimer();
+        document.getElementById("btn-rep-play").textContent = "▶";
+        return;
+      }
+      showReplayPosition(replayIndex + 1);
+    }, 700);
   }
 
   function setMsg(text, cls) {
@@ -285,6 +503,7 @@
       date: new Date().toISOString().slice(0, 19).replace("T", " "),
       timestamp: Date.now() / 1000,
       score: score,
+      knight_start: initialKnight ? E.posToAlg(initialKnight[0], initialKnight[1]) : "",
     };
     document.getElementById("win-text").textContent =
       "Слонів: " + board.numBishops + "\n" +
@@ -446,6 +665,17 @@
         '<span class="place">' + (i + 1) + "</span>" +
         '<span class="name">' + nameHtml + "</span>" +
         '<span class="val">' + R.formatValue(r, recSort) + "</span>";
+      row.addEventListener("click", function () {
+        var ks = null;
+        if (r.knight_start) ks = algToPos(r.knight_start);
+        openNotationPanel({
+          notation: r.notation || "",
+          history: flattenNotationToTokens(r.notation || ""),
+          bishops: r.bishops,
+          knightStart: ks,
+          name: r.name || "",
+        });
+      });
       listEl.appendChild(row);
     });
   }
@@ -693,6 +923,8 @@
     aiBusy = false;
     lastRecordPayload = null;
     recordSaved = false;
+    initialKnight = board.knight ? [board.knight[0], board.knight[1]] : null;
+    initialNumBishops = board.numBishops;
     setMsg("Натисніть на слона");
     updateStats();
     draw();
@@ -732,6 +964,30 @@
   document.getElementById("btn-save").addEventListener("click", function () { saveGame(false); });
   document.getElementById("btn-continue").addEventListener("click", loadGame);
   document.getElementById("btn-undo").addEventListener("click", undoMove);
+  document.getElementById("btn-notation").addEventListener("click", function () {
+    openNotationPanel({
+      history: moveHistory,
+      notation: E.formatGameNotation(moveHistory),
+      bishops: board ? board.numBishops : selectedLevel,
+      knightStart: initialKnight,
+    });
+  });
+  document.getElementById("btn-win-notation").addEventListener("click", function () {
+    openNotationPanel({
+      history: moveHistory,
+      notation: lastRecordPayload && lastRecordPayload.notation
+        ? lastRecordPayload.notation
+        : E.formatGameNotation(moveHistory),
+      bishops: board ? board.numBishops : selectedLevel,
+      knightStart: initialKnight,
+    });
+  });
+  document.getElementById("btn-notation-close").addEventListener("click", closeNotationPanel);
+  document.getElementById("btn-rep-start").addEventListener("click", repStart);
+  document.getElementById("btn-rep-prev").addEventListener("click", repPrev);
+  document.getElementById("btn-rep-play").addEventListener("click", repPlay);
+  document.getElementById("btn-rep-next").addEventListener("click", repNext);
+  document.getElementById("btn-rep-end").addEventListener("click", repEnd);
   document.getElementById("btn-again").addEventListener("click", newGame);
   document.getElementById("btn-close").addEventListener("click", hideWin);
   document.getElementById("btn-save-record").addEventListener("click", saveRecord);

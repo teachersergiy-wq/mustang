@@ -63,6 +63,8 @@
       date: String(record.date || ""),
       timestamp: Number(record.timestamp) || Date.now() / 1000,
       score: record.score,
+      knight_start: String(record.knight_start || ""),
+      undid: !!record.undid || /\*$/.test(String(record.name || "")),
     };
   }
 
@@ -90,6 +92,7 @@
       notation: rec.notation || "",
       date: rec.date,
       timestamp: rec.timestamp,
+      knight_start: rec.knight_start || "",
     };
 
     try {
