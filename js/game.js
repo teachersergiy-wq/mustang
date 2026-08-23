@@ -44,6 +44,134 @@
   let recLevel = 16;
   let worldCache = [];
 
+  const SAVE_KEY = "mustang_web_quicksave_v1";
+
+  function boardToData(b) {
+    if (!b) return null;
+    return {
+      numBishops: b.numBishops,
+      grid: b.grid.map(function (row) { return row.slice(); }),
+      bishops: b.bishops.map(function (x) { return [x[0], x[1]]; }),
+      knight: b.knight ? [b.knight[0], b.knight[1]] : null,
+    };
+  }
+
+  function boardFromData(data) {
+    var b = new E.Board(data.numBishops || 16);
+    // clear random placement
+    b.grid = data.grid.map(function (row) { return row.slice(); });
+    b.bishops = (data.bishops || []).map(function (x) { return [x[0], x[1]]; });
+    b.knight = data.knight ? [data.knight[0], data.knight[1]] : null;
+    b.numBishops = data.numBishops || b.bishops.length;
+    return b;
+  }
+
+  function hasSave() {
+    try {
+      return !!localStorage.getItem(SAVE_KEY);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function clearSave() {
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (_) {}
+    updateSaveButtons();
+  }
+
+  function saveGame(silent) {
+    if (!board || (state !== "playing" && state !== "paused")) {
+      if (!silent) setMsg("Немає активної гри для збереження");
+      return false;
+    }
+    var payload = {
+      version: 1,
+      savedAt: Date.now(),
+      selectedLevel: selectedLevel,
+      numBishops: board.numBishops,
+      board: boardToData(board),
+      moveCount: moveCount,
+      moveHistory: moveHistory.slice(),
+      elapsed: currentElapsed(),
+      state: state === "paused" ? "paused" : "playing",
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+      if (!silent) setMsg("Партію збережено");
+      updateSaveButtons();
+      return true;
+    } catch (e) {
+      if (!silent) setMsg("Не вдалося зберегти");
+      return false;
+    }
+  }
+
+  function loadGame() {
+    var raw;
+    try {
+      raw = localStorage.getItem(SAVE_KEY);
+    } catch (_) {
+      raw = null;
+    }
+    if (!raw) {
+      setMsg("Немає збереженої партії");
+      return;
+    }
+    var data;
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      setMsg("Збереження пошкоджене");
+      clearSave();
+      return;
+    }
+    if (!data || !data.board) {
+      setMsg("Збереження порожнє");
+      clearSave();
+      return;
+    }
+
+    hideWin();
+    closeRecords();
+    stopTimer();
+
+    selectedLevel = parseInt(data.selectedLevel || data.numBishops || 16, 10);
+    document.querySelectorAll(".lvl").forEach(function (btn) {
+      btn.classList.toggle("active", parseInt(btn.dataset.n, 10) === selectedLevel);
+    });
+
+    board = boardFromData(data.board);
+    moveCount = parseInt(data.moveCount, 10) || 0;
+    moveHistory = Array.isArray(data.moveHistory) ? data.moveHistory.slice() : [];
+    elapsed = Number(data.elapsed) || 0;
+    selected = null;
+    legalMoves = [];
+    aiBusy = false;
+    lastRecordPayload = null;
+    recordSaved = false;
+
+    // після завантаження — на паузі, щоб час не тікав одразу
+    state = "paused";
+    startedAt = null;
+    setMsg("Збережену партію завантажено — натисніть «Далі»", "pause");
+    updateStats();
+    updateSaveButtons();
+    draw();
+  }
+
+  function updateSaveButtons() {
+    var btnSave = document.getElementById("btn-save");
+    var btnCont = document.getElementById("btn-continue");
+    if (btnSave) {
+      btnSave.disabled = !(board && (state === "playing" || state === "paused"));
+    }
+    if (btnCont) {
+      btnCont.disabled = !hasSave();
+    }
+  }
+
   function setMsg(text, cls) {
     msgEl.textContent = text || "";
     msgEl.className = cls || "";
@@ -56,6 +184,7 @@
     const pauseBtn = document.getElementById("btn-pause");
     pauseBtn.disabled = state === "idle" || state === "finished";
     pauseBtn.textContent = state === "paused" ? "Далі" : "Пауза";
+    updateSaveButtons();
   }
 
   function currentElapsed() {
@@ -440,6 +569,7 @@
       startedAt = null;
     }
     stopTimer();
+    clearSave();
     var score = E.parityScore(board.numBishops, moveCount, elapsed);
     setMsg("Кінь спійманий!", "win");
     updateStats();
@@ -451,6 +581,7 @@
     hideWin();
     closeRecords();
     stopTimer();
+    clearSave();
     board = new E.Board(selectedLevel);
     state = "playing";
     selected = null;
@@ -477,6 +608,7 @@
       legalMoves = [];
       setMsg("Пауза — натисніть «Далі»", "pause");
       stopTimer();
+      saveGame(true);
       updateStats();
       draw();
     } else if (state === "paused") {
@@ -497,6 +629,8 @@
 
   document.getElementById("btn-new").addEventListener("click", newGame);
   document.getElementById("btn-pause").addEventListener("click", togglePause);
+  document.getElementById("btn-save").addEventListener("click", function () { saveGame(false); });
+  document.getElementById("btn-continue").addEventListener("click", loadGame);
   document.getElementById("btn-again").addEventListener("click", newGame);
   document.getElementById("btn-close").addEventListener("click", hideWin);
   document.getElementById("btn-save-record").addEventListener("click", saveRecord);
@@ -532,6 +666,22 @@
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("orientationchange", function () { setTimeout(resizeCanvas, 150); });
 
+  window.addEventListener("beforeunload", function () {
+    if (board && (state === "playing" || state === "paused")) {
+      saveGame(true);
+    }
+  });
+
+  // автозбереження кожні 30 с під час гри
+  setInterval(function () {
+    if (board && state === "playing") saveGame(true);
+  }, 30000);
+
   resizeCanvas();
-  setMsg("Оберіть рівень і натисніть «Нова гра»");
+  updateSaveButtons();
+  if (hasSave()) {
+    setMsg("Є збережена партія — «Продовжити»");
+  } else {
+    setMsg("Оберіть рівень і натисніть «Нова гра»");
+  }
 })();
