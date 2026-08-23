@@ -61,15 +61,16 @@ header h1 {
 
 #stats {
   display: flex;
-  gap: 10px;
-  font-size: 0.78rem;
+  gap: 12px;
+  font-size: 1rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 #stats span strong {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.08rem;
 }
 
 /* ---- Message ---- */
@@ -106,6 +107,8 @@ header h1 {
   width: min(100%, calc(100dvh - 210px), 420px);
   height: auto;
   aspect-ratio: 1;
+  /* підняти дошку на ~1 клітинку */
+  transform: translateY(-12.5%);
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   touch-action: none;
@@ -232,7 +235,7 @@ header h1 {
 /* ---- Very small phones ---- */
 @media (max-height: 620px) {
   header h1 { font-size: 1.05rem; }
-  #stats { font-size: 0.72rem; }
+  #stats { font-size: 0.92rem; }
   .levels button { height: 36px; font-size: 0.85rem; }
   .actions button { height: 42px; font-size: 0.88rem; }
   #message { font-size: 0.8rem; }
