@@ -461,3 +461,11 @@ header h1 {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+
+/* рекорд із відміною ходів */
+.rec-row .name em.undid-name,
+.rec-row.undid .name {
+  font-style: italic;
+  opacity: 0.95;
+}
