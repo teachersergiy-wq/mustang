@@ -499,3 +499,34 @@ header h1 {
 .rec-row:active {
   background: #3a3632;
 }
+
+
+/* Кампанії */
+.campaign-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 320px);
+  margin: 8px 0 12px;
+}
+.camp-btn {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #555;
+  background: var(--btn);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-width: auto;
+}
+.camp-btn.active {
+  border-color: var(--accent);
+  background: #4a4238;
+}
+#campaign-banner {
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-align: center;
+  min-height: 1.1em;
+}
