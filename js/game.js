@@ -55,6 +55,18 @@
   let replayActive = false;
   let replayMeta = null;
   let gameBoardBackup = null;
+  let campaignType = null; // summit | steps2026 | marathon | null
+  let campaignTotalMoves = 0;
+  let campaignTotalTime = 0;
+  let campaignLevelMoves = 0;
+  let campaignLevelStartElapsed = 0;
+  let campaignMarathonStart = null;
+  let campaignPlayerName = "";
+  let selectedCampaign = "summit";
+  const CAMP_KEY = "mustang_web_campaigns_v1";
+  const LEVEL_MOVE_LIMIT = 500;
+  const STEPS_2026_LIMIT = 2026;
+  const MARATHON_TIME_LIMIT = 2 * 3600 + 26 * 60;
 
   function boardToData(b) {
     if (!b) return null;
@@ -344,29 +356,27 @@
     opts = opts || {};
     var tokens = flattenNotationToTokens(opts.history || opts.notation || moveHistory);
     var nb = parseInt(opts.bishops != null ? opts.bishops : (board ? board.numBishops : selectedLevel), 10);
-    var k0 = opts.knightStart || initialKnight;
-    if (!k0 && board && board.knight && tokens.length === 0) {
-      k0 = [board.knight[0], board.knight[1]];
-    }
-    // якщо стартового коня немає — спробувати з першого N-ходу (наближено неточно),
-    // краще вимагати knightStart; для поточної гри він завжди є
-    if (!k0) {
-      for (var i = 0; i < tokens.length; i++) {
-        var t = parseHistoryToken(tokens[i]);
-        if (t && t.piece === "N") {
-          // не стартова позиція; для старих рекордів покажемо лише текст
-          break;
-        }
+    // Старт коня = поле «звідки» у ПЕРШОМУ ході коня (N) у нотації
+    var k0 = null;
+    for (var i = 0; i < tokens.length; i++) {
+      var tkn = parseHistoryToken(tokens[i]);
+      if (tkn && tkn.piece === "N" && tkn.from) {
+        k0 = [tkn.from[0], tkn.from[1]];
+        break;
       }
+    }
+    // якщо в нотації кінь ще не ходив — поточна позиція на дошці (жива партія)
+    if (!k0 && board && board.knight) {
+      k0 = [board.knight[0], board.knight[1]];
     }
 
     replayMoves = tokens;
-    replayIndex = tokens.length; // show final by default
+    replayIndex = tokens.length;
     replayMeta = {
       bishops: nb,
       knightStart: k0,
       name: opts.name || "",
-      canReplay: !!(k0 && tokens.length),
+      canReplay: !!k0,
     };
 
     var text = opts.notation || (E.formatGameNotation(tokens) || "(порожньо)");
@@ -375,7 +385,8 @@
     if (opts.name) meta.push(opts.name);
     meta.push(nb + " сл.");
     meta.push(tokens.length + " півходів");
-    if (!replayMeta.canReplay) meta.push("replay недоступний (немає стартової позиції)");
+    if (k0) meta.push("старт коня " + E.posToAlg(k0[0], k0[1]));
+    if (!replayMeta.canReplay) meta.push("replay недоступний");
     document.getElementById("notation-meta").textContent = meta.join(" · ");
 
     stopReplayTimer();
@@ -466,6 +477,296 @@
       }
       showReplayPosition(replayIndex + 1);
     }, 700);
+  }
+
+
+  function campLevelTimeLimit(nBishops) {
+    // (32 − N) × 60 + 120
+    return (32 - nBishops) * 60 + 120;
+  }
+
+  function loadAllCampaigns() {
+    try {
+      var raw = localStorage.getItem(CAMP_KEY);
+      var d = raw ? JSON.parse(raw) : {};
+      return d && typeof d === "object" ? d : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveAllCampaigns(obj) {
+    try {
+      localStorage.setItem(CAMP_KEY, JSON.stringify(obj));
+    } catch (_) {}
+  }
+
+  function campKey(type, name) {
+    return String(type) + "::" + String(name || "Гравець").trim().toLowerCase();
+  }
+
+  function getCampaignProgress(type, name) {
+    var all = loadAllCampaigns();
+    return all[campKey(type, name)] || null;
+  }
+
+  function setCampaignProgress(data) {
+    var all = loadAllCampaigns();
+    all[campKey(data.campaign_type, data.name)] = data;
+    saveAllCampaigns(all);
+  }
+
+  function clearCampaignProgress(type, name) {
+    var all = loadAllCampaigns();
+    delete all[campKey(type, name)];
+    saveAllCampaigns(all);
+  }
+
+  function updateCampaignBanner() {
+    var el = document.getElementById("campaign-banner");
+    if (!el) return;
+    if (!campaignType) {
+      el.textContent = "";
+      return;
+    }
+    var title = {
+      summit: "Вершина",
+      steps2026: "2026 кроків",
+      marathon: "Марафон",
+    }[campaignType] || campaignType;
+    var parts = [
+      title,
+      (board ? board.numBishops : selectedLevel) + " сл.",
+      "Σ ходів " + campaignTotalMoves,
+    ];
+    if (campaignType === "steps2026") {
+      parts.push("ліміт " + STEPS_2026_LIMIT);
+    }
+    if (campaignType === "marathon" && campaignMarathonStart) {
+      var left = Math.max(0, MARATHON_TIME_LIMIT - (Date.now() / 1000 - campaignMarathonStart));
+      var m = Math.floor(left / 60);
+      var s = Math.floor(left % 60);
+      parts.push("залишок " + m + ":" + (s < 10 ? "0" : "") + s);
+    }
+    if (campaignType === "summit" && board) {
+      var lim = campLevelTimeLimit(board.numBishops);
+      var used = currentElapsed() - campaignLevelStartElapsed;
+      var leftL = Math.max(0, lim - used);
+      parts.push("рівень " + Math.ceil(leftL) + "с");
+    }
+    el.textContent = parts.join(" · ");
+  }
+
+  function openCampaigns() {
+    document.getElementById("campaigns-panel").classList.remove("hidden");
+    var nameInput = document.getElementById("camp-name");
+    if (R && !nameInput.value) nameInput.value = (R.getPlayerName() || "").replace(/\*+$/, "");
+    document.querySelectorAll(".camp-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.camp === selectedCampaign);
+    });
+    refreshCampaignStatus();
+  }
+
+  function closeCampaigns() {
+    document.getElementById("campaigns-panel").classList.add("hidden");
+  }
+
+  function refreshCampaignStatus() {
+    var name = (document.getElementById("camp-name").value || "").trim() || "Гравець";
+    var prog = getCampaignProgress(selectedCampaign, name);
+    var el = document.getElementById("camp-status");
+    var desc = document.getElementById("campaign-desc");
+    var texts = {
+      summit: "32→1 слон. Програш рівня: 500 ходів або кінець часу рівня. Час рівня: (32−N)×60+120 с.",
+      steps2026: "32→1 слон. Спільний ліміт 2026 ходів на всю кампанію.",
+      marathon: "32→1 слон. Спільний ліміт часу 2 год 26 хв.",
+    };
+    desc.textContent = texts[selectedCampaign] || "";
+    if (prog && prog.status === "ongoing") {
+      el.textContent = "Збережено: " + prog.num_bishops + " сл., ходів " + prog.campaign_total_moves +
+        ", час " + Number(prog.campaign_total_time).toFixed(1) + " с";
+    } else if (prog && prog.status === "finished") {
+      el.textContent = "Завершено раніше: дійшли до " + prog.num_bishops + " сл.";
+    } else {
+      el.textContent = "Нова кампанія з 32 слонів";
+    }
+  }
+
+  function startOrResumeCampaign() {
+    var name = (document.getElementById("camp-name").value || "").trim() || "Гравець";
+    campaignPlayerName = name;
+    if (R) R.setPlayerName(name.replace(/\*+$/, ""));
+    var prog = getCampaignProgress(selectedCampaign, name);
+    campaignType = selectedCampaign;
+    campaignTotalMoves = 0;
+    campaignTotalTime = 0;
+    campaignMarathonStart = null;
+
+    var startB = 32;
+    if (prog && prog.status === "ongoing" && prog.num_bishops >= 1) {
+      startB = parseInt(prog.num_bishops, 10);
+      campaignTotalMoves = parseInt(prog.campaign_total_moves, 10) || 0;
+      campaignTotalTime = Number(prog.campaign_total_time) || 0;
+      if (campaignType === "marathon" && prog.marathon_elapsed) {
+        campaignMarathonStart = Date.now() / 1000 - Number(prog.marathon_elapsed);
+      }
+    }
+    if (campaignType === "marathon" && !campaignMarathonStart) {
+      campaignMarathonStart = Date.now() / 1000;
+    }
+
+    closeCampaigns();
+    selectedLevel = startB;
+    document.querySelectorAll(".lvl").forEach(function (btn) {
+      // рівні кампанії можуть бути 31, 30… — підсвітимо найближчу кнопку або жодна
+      var n = parseInt(btn.dataset.n, 10);
+      btn.classList.toggle("active", n === startB);
+    });
+    startCampaignLevel(startB);
+  }
+
+  function startCampaignLevel(nBishops) {
+    hideWin();
+    closeRecords();
+    closeNotationPanel();
+    stopTimer();
+    clearSave();
+    undoStack = [];
+    undoUsed = false;
+    selectedLevel = nBishops;
+    board = new E.Board(nBishops);
+    state = "playing";
+    selected = null;
+    legalMoves = [];
+    moveCount = 0;
+    moveHistory = [];
+    elapsed = 0;
+    startedAt = performance.now() / 1000;
+    aiBusy = false;
+    lastRecordPayload = null;
+    recordSaved = false;
+    initialKnight = board.knight ? [board.knight[0], board.knight[1]] : null;
+    initialNumBishops = board.numBishops;
+    campaignLevelMoves = 0;
+    campaignLevelStartElapsed = 0;
+    setMsg("Кампанія: " + nBishops + " слонів — ваш хід");
+    updateStats();
+    updateCampaignBanner();
+    draw();
+    startTimer();
+    persistCampaign("ongoing");
+  }
+
+  function persistCampaign(status) {
+    if (!campaignType) return;
+    var marathonElapsed = 0;
+    if (campaignType === "marathon" && campaignMarathonStart) {
+      marathonElapsed = Date.now() / 1000 - campaignMarathonStart;
+    }
+    setCampaignProgress({
+      name: campaignPlayerName || "Гравець",
+      campaign_type: campaignType,
+      num_bishops: board ? board.numBishops : selectedLevel,
+      campaign_total_moves: campaignTotalMoves,
+      campaign_total_time: Math.round(campaignTotalTime * 10) / 10,
+      marathon_elapsed: marathonElapsed,
+      status: status || "ongoing",
+    });
+  }
+
+  function failCampaignLevel(reason) {
+    if (state !== "playing") return;
+    state = "finished";
+    if (startedAt != null) {
+      elapsed += performance.now() / 1000 - startedAt;
+      startedAt = null;
+    }
+    stopTimer();
+    campaignTotalTime += elapsed;
+    setMsg("Рівень програно: " + reason);
+    updateCampaignBanner();
+    persistCampaign("ongoing");
+    alert(
+      "Кампанія: рівень " + (board ? board.numBishops : "") + " програно.\n" +
+      reason +
+      "\nЗагалом ходів: " + campaignTotalMoves +
+      "\nМожна почати цей рівень знову з меню «Кампанії»."
+    );
+  }
+
+  function onCampaignLevelWin() {
+    var levelTime = elapsed;
+    campaignTotalMoves += moveCount;
+    campaignTotalTime += levelTime;
+    var cur = board.numBishops;
+    persistCampaign("ongoing");
+
+    if (cur <= 1) {
+      // перемогли з 1 слоном
+      persistCampaign("finished");
+      setMsg("Кампанію завершено! До 1 слона.");
+      updateCampaignBanner();
+      alert("Вітаємо! Кампанію пройдено до 1 слона.\nХодів загалом: " + campaignTotalMoves +
+        "\nЧас: " + campaignTotalTime.toFixed(1) + " с");
+      campaignType = null;
+      updateCampaignBanner();
+      return;
+    }
+
+    var next = cur - 1;
+    // ліміти на всю кампанію
+    if (campaignType === "steps2026" && campaignTotalMoves >= STEPS_2026_LIMIT) {
+      persistCampaign("finished");
+      alert("Ліміт 2026 ходів вичерпано. Найкращий рівень: " + cur + " слонів.");
+      campaignType = null;
+      updateCampaignBanner();
+      return;
+    }
+    if (campaignType === "marathon" && campaignMarathonStart) {
+      var used = Date.now() / 1000 - campaignMarathonStart;
+      if (used >= MARATHON_TIME_LIMIT) {
+        persistCampaign("finished");
+        alert("Час марафону вичерпано. Найкращий рівень: " + cur + " слонів.");
+        campaignType = null;
+        updateCampaignBanner();
+        return;
+      }
+    }
+
+    setMsg("Рівень " + cur + " пройдено → далі " + next + " слонів");
+    updateCampaignBanner();
+    setTimeout(function () {
+      if (campaignType) startCampaignLevel(next);
+    }, 600);
+  }
+
+  function checkCampaignLimits() {
+    if (!campaignType || state !== "playing") return;
+    // 500 ходів на рівень
+    if (moveCount >= LEVEL_MOVE_LIMIT) {
+      failCampaignLevel("більше " + LEVEL_MOVE_LIMIT + " ходів на рівень");
+      return;
+    }
+    if (campaignType === "summit" && board) {
+      var lim = campLevelTimeLimit(board.numBishops);
+      var used = currentElapsed() - campaignLevelStartElapsed;
+      if (used >= lim) {
+        failCampaignLevel("час рівня (" + lim + " с) вичерпано");
+        return;
+      }
+    }
+    if (campaignType === "steps2026") {
+      if (campaignTotalMoves + moveCount >= STEPS_2026_LIMIT) {
+        // дозволяємо дограти рівень, перевірка після перемоги теж є
+      }
+    }
+    if (campaignType === "marathon" && campaignMarathonStart) {
+      if (Date.now() / 1000 - campaignMarathonStart >= MARATHON_TIME_LIMIT) {
+        failCampaignLevel("час марафону (2:26:00) вичерпано");
+        return;
+      }
+    }
+    updateCampaignBanner();
   }
 
   function setMsg(text, cls) {
@@ -666,13 +967,10 @@
         '<span class="name">' + nameHtml + "</span>" +
         '<span class="val">' + R.formatValue(r, recSort) + "</span>";
       row.addEventListener("click", function () {
-        var ks = null;
-        if (r.knight_start) ks = algToPos(r.knight_start);
         openNotationPanel({
           notation: r.notation || "",
           history: flattenNotationToTokens(r.notation || ""),
           bishops: r.bishops,
-          knightStart: ks,
           name: r.name || "",
         });
       });
@@ -691,7 +989,10 @@
   function startTimer() {
     stopTimer();
     timerId = setInterval(function () {
-      if (state === "playing") updateStats();
+      if (state === "playing") {
+        updateStats();
+        checkCampaignLimits();
+      }
     }, 200);
   }
 
@@ -863,6 +1164,8 @@
     legalMoves = [];
     updateStats();
     draw();
+    checkCampaignLimits();
+    if (state !== "playing") return;
 
     if (E.isKnightCaught(board)) {
       finishWin();
@@ -902,6 +1205,12 @@
     setMsg("Кінь спійманий!", "win");
     updateStats();
     draw();
+    if (campaignType) {
+      onCampaignLevelWin();
+      // рекорд рівня все одно можна зберегти
+      showWin(score);
+      return;
+    }
     showWin(score);
   }
 
@@ -910,6 +1219,8 @@
     closeRecords();
     stopTimer();
     clearSave();
+    campaignType = null;
+    updateCampaignBanner();
     undoStack = [];
     undoUsed = false;
     board = new E.Board(selectedLevel);
@@ -969,7 +1280,6 @@
       history: moveHistory,
       notation: E.formatGameNotation(moveHistory),
       bishops: board ? board.numBishops : selectedLevel,
-      knightStart: initialKnight,
     });
   });
   document.getElementById("btn-win-notation").addEventListener("click", function () {
@@ -979,10 +1289,29 @@
         ? lastRecordPayload.notation
         : E.formatGameNotation(moveHistory),
       bishops: board ? board.numBishops : selectedLevel,
-      knightStart: initialKnight,
     });
   });
   document.getElementById("btn-notation-close").addEventListener("click", closeNotationPanel);
+  document.getElementById("btn-campaigns").addEventListener("click", openCampaigns);
+  document.getElementById("btn-campaigns-close").addEventListener("click", closeCampaigns);
+  document.getElementById("btn-camp-start").addEventListener("click", startOrResumeCampaign);
+  document.getElementById("btn-camp-reset").addEventListener("click", function () {
+    var name = (document.getElementById("camp-name").value || "").trim() || "Гравець";
+    if (confirm("Скинути прогрес кампанії «" + selectedCampaign + "» для " + name + "?")) {
+      clearCampaignProgress(selectedCampaign, name);
+      refreshCampaignStatus();
+    }
+  });
+  document.querySelectorAll(".camp-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      selectedCampaign = btn.dataset.camp;
+      document.querySelectorAll(".camp-btn").forEach(function (b) {
+        b.classList.toggle("active", b.dataset.camp === selectedCampaign);
+      });
+      refreshCampaignStatus();
+    });
+  });
+  document.getElementById("camp-name").addEventListener("input", refreshCampaignStatus);
   document.getElementById("btn-rep-start").addEventListener("click", repStart);
   document.getElementById("btn-rep-prev").addEventListener("click", repPrev);
   document.getElementById("btn-rep-play").addEventListener("click", repPlay);
