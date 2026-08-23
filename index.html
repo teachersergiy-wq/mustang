@@ -21,6 +21,7 @@
     </header>
 
     <div id="message">Оберіть рівень і натисніть «Нова гра»</div>
+    <div id="campaign-banner"></div>
 
     <div id="board-wrap">
       <canvas id="board" width="400" height="400"></canvas>
@@ -46,8 +47,9 @@
         <button type="button" id="btn-undo" class="secondary" disabled>Відмінити хід</button>
         <button type="button" id="btn-records" class="secondary">Рекорди</button>
       </div>
-      <div class="actions single">
+      <div class="actions">
         <button type="button" id="btn-notation" class="secondary" disabled>Нотація</button>
+        <button type="button" id="btn-campaigns" class="secondary">Кампанії</button>
       </div>
     </div>
   </div>
@@ -101,6 +103,27 @@
     </div>
     <p id="notation-step" class="hint"></p>
     <button type="button" id="btn-notation-close" class="secondary wide">Закрити</button>
+  </div>
+
+
+  <div id="campaigns-panel" class="hidden overlay">
+    <h2>Кампанії</h2>
+    <p class="hint" id="campaign-desc">Оберіть тип кампанії</p>
+    <div class="campaign-list">
+      <button type="button" class="camp-btn" data-camp="summit">Подорож до вершини</button>
+      <button type="button" class="camp-btn" data-camp="steps2026">Подорож 2026 кроків</button>
+      <button type="button" class="camp-btn" data-camp="marathon">Марафонський забіг</button>
+    </div>
+    <label class="field">
+      <span>Ваше ім'я</span>
+      <input id="camp-name" type="text" maxlength="32" placeholder="Гравець" />
+    </label>
+    <p id="camp-status" class="hint"></p>
+    <div class="row">
+      <button type="button" id="btn-camp-start">Почати / Продовжити</button>
+      <button type="button" id="btn-camp-reset" class="secondary">Скинути</button>
+    </div>
+    <button type="button" id="btn-campaigns-close" class="secondary wide">Закрити</button>
   </div>
 
   <script src="js/config.js"></script>
