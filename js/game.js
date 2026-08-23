@@ -45,6 +45,8 @@
   let worldCache = [];
 
   const SAVE_KEY = "mustang_web_quicksave_v1";
+  let undoStack = [];
+  let undoUsed = false;
 
   function boardToData(b) {
     if (!b) return null;
@@ -64,6 +66,69 @@
     b.knight = data.knight ? [data.knight[0], data.knight[1]] : null;
     b.numBishops = data.numBishops || b.bishops.length;
     return b;
+  }
+
+  function snapshotState() {
+    return {
+      board: boardToData(board),
+      moveCount: moveCount,
+      moveHistory: moveHistory.slice(),
+      elapsed: currentElapsed(),
+      selectedLevel: selectedLevel,
+    };
+  }
+
+  function restoreState(snap) {
+    if (!snap || !snap.board) return;
+    board = boardFromData(snap.board);
+    moveCount = parseInt(snap.moveCount, 10) || 0;
+    moveHistory = Array.isArray(snap.moveHistory) ? snap.moveHistory.slice() : [];
+    elapsed = Number(snap.elapsed) || 0;
+    if (snap.selectedLevel) selectedLevel = parseInt(snap.selectedLevel, 10);
+    selected = null;
+    legalMoves = [];
+    aiBusy = false;
+  }
+
+  function pushUndo() {
+    if (!board) return;
+    undoStack.push(snapshotState());
+    if (undoStack.length > 60) undoStack.shift();
+  }
+
+  function undoMove() {
+    if (aiBusy) {
+      setMsg("Зачекайте ходу коня");
+      return;
+    }
+    if (!undoStack.length) {
+      setMsg("Немає ходів для відміни");
+      return;
+    }
+    if (state === "finished") {
+      hideWin();
+    }
+    if (state !== "playing" && state !== "paused" && state !== "finished") {
+      setMsg("Немає активної гри");
+      return;
+    }
+    var snap = undoStack.pop();
+    undoUsed = true;
+    restoreState(snap);
+    // після undo — можна грати далі
+    if (state === "finished") {
+      state = "playing";
+      startedAt = performance.now() / 1000;
+      startTimer();
+    } else if (state === "playing") {
+      // час продовжується; elapsed вже з snapshot
+      startedAt = performance.now() / 1000;
+    }
+    setMsg("Хід відмінено");
+    updateStats();
+    updateSaveButtons();
+    draw();
+    saveGame(true);
   }
 
   function hasSave() {
@@ -96,6 +161,8 @@
       moveHistory: moveHistory.slice(),
       elapsed: currentElapsed(),
       state: state === "paused" ? "paused" : "playing",
+      undoStack: undoStack.slice(-30),
+      undoUsed: !!undoUsed,
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -151,6 +218,8 @@
     aiBusy = false;
     lastRecordPayload = null;
     recordSaved = false;
+    undoStack = Array.isArray(data.undoStack) ? data.undoStack : [];
+    undoUsed = !!data.undoUsed || undoStack.length > 0;
 
     // після завантаження — на паузі, щоб час не тікав одразу
     state = "paused";
@@ -164,11 +233,20 @@
   function updateSaveButtons() {
     var btnSave = document.getElementById("btn-save");
     var btnCont = document.getElementById("btn-continue");
+    var btnUndo = document.getElementById("btn-undo");
     if (btnSave) {
       btnSave.disabled = !(board && (state === "playing" || state === "paused"));
     }
     if (btnCont) {
       btnCont.disabled = !hasSave();
+    }
+    if (btnUndo) {
+      btnUndo.disabled = !(
+        undoStack.length > 0 &&
+        !aiBusy &&
+        board &&
+        (state === "playing" || state === "paused" || state === "finished")
+      );
     }
   }
 
@@ -214,8 +292,13 @@
       "Час: " + t.toFixed(1) + " с\n" +
       (score != null ? "Score: " + score.toFixed(0) : "");
     const nameInput = document.getElementById("win-name");
-    if (R) nameInput.value = R.getPlayerName() || nameInput.value || "";
-    document.getElementById("win-save-status").textContent = "";
+    if (R) {
+      var pn = (R.getPlayerName() || nameInput.value || "").replace(/\*+$/, "");
+      nameInput.value = pn;
+    }
+    document.getElementById("win-save-status").textContent = undoUsed
+      ? "Було відміни ходів — у рекорді ім'я буде з * (курсив)"
+      : "";
     document.getElementById("win-panel").classList.remove("hidden");
   }
 
@@ -231,13 +314,18 @@
     }
     let name = (document.getElementById("win-name").value || "").trim();
     if (!name) name = "Гравець";
+    // прибираємо зірочку з поля вводу, додамо службово
+    name = name.replace(/\*+$/, "").trim() || "Гравець";
     if (name.toLowerCase() === "гість" || name.toLowerCase() === "guest") {
       document.getElementById("win-save-status").textContent =
         "Ім'я «Гість» не для світу. Введіть інше.";
       return;
     }
     R.setPlayerName(name);
-    const rec = Object.assign({}, lastRecordPayload, { name: name });
+    if (undoUsed && !name.endsWith("*")) {
+      name = name + "*";
+    }
+    const rec = Object.assign({}, lastRecordPayload, { name: name, undid: !!undoUsed });
     R.addLocal(rec);
     document.getElementById("win-save-status").textContent = "Збережено на пристрої…";
     const world = await R.submitWorld(rec);
@@ -342,12 +430,21 @@
     sorted.forEach(function (r, i) {
       var row = document.createElement("div");
       row.className = "rec-row";
-      if (myName && String(r.name).toLowerCase() === myName.toLowerCase()) {
+      var rn = String(r.name || "").replace(/\*+$/, "").toLowerCase();
+      var mn = String(myName || "").replace(/\*+$/, "").toLowerCase();
+      if (mn && rn === mn) {
         row.classList.add("me");
+      }
+      var displayName = String(r.name || "");
+      var undid = !!r.undid || /\*$/.test(displayName);
+      var nameHtml = escapeHtml(displayName);
+      if (undid) {
+        nameHtml = '<em class="undid-name">' + nameHtml + "</em>";
+        row.classList.add("undid");
       }
       row.innerHTML =
         '<span class="place">' + (i + 1) + "</span>" +
-        '<span class="name">' + escapeHtml(r.name) + "</span>" +
+        '<span class="name">' + nameHtml + "</span>" +
         '<span class="val">' + R.formatValue(r, recSort) + "</span>";
       listEl.appendChild(row);
     });
@@ -528,6 +625,7 @@
   }
 
   function doBishopMove(fr, fc, tr, tc) {
+    pushUndo();
     board.move(fr, fc, tr, tc);
     moveHistory.push("B" + E.posToAlg(fr, fc) + "-" + E.posToAlg(tr, tc));
     moveCount += 1;
@@ -582,6 +680,8 @@
     closeRecords();
     stopTimer();
     clearSave();
+    undoStack = [];
+    undoUsed = false;
     board = new E.Board(selectedLevel);
     state = "playing";
     selected = null;
@@ -631,6 +731,7 @@
   document.getElementById("btn-pause").addEventListener("click", togglePause);
   document.getElementById("btn-save").addEventListener("click", function () { saveGame(false); });
   document.getElementById("btn-continue").addEventListener("click", loadGame);
+  document.getElementById("btn-undo").addEventListener("click", undoMove);
   document.getElementById("btn-again").addEventListener("click", newGame);
   document.getElementById("btn-close").addEventListener("click", hideWin);
   document.getElementById("btn-save-record").addEventListener("click", saveRecord);
