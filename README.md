@@ -44,3 +44,7 @@ APPS_SCRIPT_URL: "https://script.google.com/macros/s/XXXX/exec",
 1. Виграйте партію → ім'я → Зберегти рекорд.
 2. Рекорди → На пристрої.
 3. Рекорди → Світ (після підключення URL).
+
+
+## Мобільна версія v21
+Порт на базі `mustang_gui.21_ai.py`: [`mobile_v21/`](./mobile_v21/) — для GitHub Pages: `https://teachersergiy-wq.github.io/mustang/mobile_v21/`.
