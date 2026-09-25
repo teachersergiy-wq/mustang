@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1e1c1a">
+  <title>Мустанг — mobile v21 AI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <header>
+    <div>
+      <h1>Мустанг</h1>
+      <div id="mode-label">Швидка гра</div>
+    </div>
+    <div id="stats">
+      <span>Сл <b id="st-b">—</b></span>
+      <span>Ходи <b id="st-m">0</b></span>
+      <span>Час <b id="st-t">0.0</b></span>
+    </div>
+  </header>
+
+  <div id="message">Оберіть рівень і натисніть «Нова гра»</div>
+  <div id="ai-status"></div>
+  <div id="campaign-banner"></div>
+
+  <section id="board-wrap"><canvas id="board"></canvas></section>
+
+  <section id="controls">
+    <div class="levels">
+      <button class="lvl active" data-n="32">32</button>
+      <button class="lvl" data-n="24">24</button>
+      <button class="lvl" data-n="16">16</button>
+      <button class="lvl" data-n="14">14</button>
+      <button class="lvl" data-n="12">12</button>
+      <button id="btn-custom" class="small">Свій</button>
+    </div>
+
+    <div class="grid2">
+      <button id="btn-new">Нова гра</button>
+      <button id="btn-ai" class="secondary">GPT ×20</button>
+    </div>
+    <div class="grid2">
+      <button id="btn-pause" class="secondary" disabled>Пауза</button>
+      <button id="btn-save" class="secondary" disabled>Зберегти</button>
+    </div>
+    <div class="grid2">
+      <button id="btn-continue" class="secondary" disabled>Продовжити</button>
+      <button id="btn-undo" class="secondary" disabled>Відмінити хід</button>
+    </div>
+    <div class="grid3">
+      <button id="btn-records" class="secondary">Рекорди</button>
+      <button id="btn-notation" class="secondary" disabled>Нотація</button>
+      <button id="btn-campaigns" class="secondary">Кампанії</button>
+    </div>
+  </section>
+</main>
+
+<section id="win-panel" class="overlay hidden">
+  <div class="panel">
+    <h2>Перемога!</h2>
+    <p id="win-text"></p>
+    <label class="field"><span>Ім'я</span><input id="win-name" maxlength="32" placeholder="Гравець"></label>
+    <div id="win-status" class="hint"></div>
+    <div class="grid2">
+      <button id="btn-save-record">Зберегти рекорд</button>
+      <button id="btn-again" class="secondary">Ще раз</button>
+    </div>
+    <button id="btn-win-notation" class="secondary wide">Нотація / replay</button>
+    <button id="btn-win-close" class="linkish">Закрити</button>
+  </div>
+</section>
+
+<section id="records-panel" class="overlay hidden">
+  <div class="panel tall">
+    <h2>Рекорди</h2>
+    <div class="tabs"><button class="tab active" data-src="local">На пристрої</button><button class="tab" data-src="world">Світ</button></div>
+    <div id="rec-levels" class="wrap-buttons"></div>
+    <div class="sort-row">
+      <button class="sort active" data-sort="time">Час</button>
+      <button class="sort" data-sort="moves">Ходи</button>
+      <button class="sort" data-sort="worldscore">World score</button>
+    </div>
+    <div id="records-list" class="records-list"></div>
+    <div id="records-hint" class="hint"></div>
+    <button id="btn-records-close" class="secondary wide">Закрити</button>
+  </div>
+</section>
+
+<section id="notation-panel" class="overlay hidden bottom">
+  <div class="panel tall">
+    <h2>Нотація / replay</h2>
+    <div id="notation-meta" class="hint"></div>
+    <pre id="notation-text" class="notation"></pre>
+    <div class="grid5">
+      <button id="rep-start" class="secondary">⏮</button>
+      <button id="rep-prev" class="secondary">◀</button>
+      <button id="rep-play" class="secondary">▶</button>
+      <button id="rep-next" class="secondary">▶|</button>
+      <button id="rep-end" class="secondary">⏭</button>
+    </div>
+    <div id="notation-step" class="hint"></div>
+    <button id="btn-notation-close" class="secondary wide">Закрити</button>
+  </div>
+</section>
+
+<section id="campaigns-panel" class="overlay hidden">
+  <div class="panel">
+    <h2>Кампанії</h2>
+    <div id="campaign-types" class="campaign-list">
+      <button class="camp active" data-type="summit">Подорож до вершини</button>
+      <button class="camp" data-type="steps2026">Подорож 2026 кроків</button>
+      <button class="camp" data-type="marathon">Марафонський забіг</button>
+    </div>
+    <div id="campaign-desc" class="hint"></div>
+    <label class="field"><span>Ім'я</span><input id="camp-name" maxlength="32" placeholder="Гравець"></label>
+    <label class="field"><span>Пароль кампанії</span><input id="camp-password" maxlength="64" type="password" placeholder="Для продовження"></label>
+    <div id="camp-status" class="hint"></div>
+    <div class="grid2">
+      <button id="btn-camp-start">Почати / Продовжити</button>
+      <button id="btn-camp-reset" class="secondary">Скинути</button>
+    </div>
+    <button id="btn-campaigns-close" class="secondary wide">Закрити</button>
+  </div>
+</section>
+
+<script src="../js/config.js"></script>
+<script src="../js/game_engine.js"></script>
+<script src="../js/records.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
